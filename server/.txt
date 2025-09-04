@@ -1,0 +1,146 @@
+Uses pathlib.Path to get folder where this python file lives
+Path(__file__) current file path
+.resolve() makes it absolute (no ...)
+.parent- directory containing file
+result: Path object (OS dependent)
+
+using / with Path safely joins paths on any OS
+
+STORAGE_DIR.mkdir(exist_ok=True)
+creates a storage folder if it doesn't exist
+exist_ok= True  prevents crashing if it already exists (idempotent)
+
+reads API_KEY from environment variables
+if not set API_KEY= None
+
+%s string, %d integer, %f float, %r repr() of object debug format, %x/%X hex(lower/upper case)
+
+Path(output_csv_path).parent.mkdir(parents=True, exist_ok=True)
+creates that folder if doesn't exist
+- ensures folder exists before saving file, so no such directory errors
+
+Encoding UTF-8
+encoding- how characters are stored as bytes in a file
+utf-8 unicode transformations format- 8-bit
+can store any language, symbols
+universal, safe
+without it errors like risk of errors like UnicodeEncodeError because python might save in system's default encoding
+
+str.strip()- removes leading and trailing whitespace (spaces,tabs,newline characters) from string
+
+pd.to_datetime(os.path.getmtime(input_csv),unit="s")
+- gets last modified time of file in seconds since epoch
+pd.to_datetime(..., unit="s")
+- converts that timestamp into a readable pandas datetime
+
+unit="s" means number being converted is in seconds since epoch (Unix timestamp)
+
+pd.Timestamp().now()
+# Output: Timestamp('2025-09-03 19:01:23.456789')
+it is similar to datetime.now() in python but in Pandas format
+
+function get_range_byte_positions
+- parses HTTP Range header used when a client (like a browser) requests only part of a file
+- common for streaming large files like PDFs or videos
+- converts range header into actual byte positions (start,end) within file
+
+input arguments:
+range_header: HTTP header string eg. bytes=0-1234
+file_size: size of file in bytes
+if a header is missing or doesn't start with bytes= return None
+splits on "=" gets 0-1234
+splits on "-" gets 0, 1234
+-N (suffix bytes) means last N bytes
+bytes=-500 last 500 bytes
+start- means from start to end of file
+bytes=1024- from bytes 1024 to end
+start-end
+bytes=0-1024 bytes 0 through 1023
+if start<0 set it to 0
+if end is past file size cap it filesize-1
+if start>end return None
+Returns
+a tuple (start,end) with byte positions
+None if range is invalid
+
+range_val = header.split("=", 1)[1]
+- ensures that we don't split more than once if extra = occurs
+
+def range_stream_response
+- this function serves files efficiently over HTTP and supports Range requests (used for streaming large files like PDFs, videos)
+- Instead of sending whole file, it can send just a requested byte range when client ask for it
+
+file information: file_size= path.stat().st_size
+- gets file size in bytes
+range_header= request.headers.get("range")
+range_pos= get_range_byte_positions(range_header, file_size)
+- looks for range header in request
+
+Prepare base headers
+headers={
+    "Accept-Ranges" : "bytes", this server supports partial downloads
+    "Content-Type": "application/octet-stream", generic binary
+    "Content-Disposition": f'inline; filename="{path.name}"' inline (preview in browser) with filename
+}
+
+if range_pos is None- full file
+open file and read it chunk by chunk(1 mb)
+yield chunks as stream instead of loading whole file in memory
+sets "Content-Length" : to full file size
+Returns a StreamingResponse with status 200 ok
+
+for range sets Content-Range as bytes 0-1023/5000
+Jumps directly to the requested start position (f.seek(start)).
+
+Reads only the requested portion in chunks.
+Returns a StreamingResponse with status 206 partial content (special HTTP status for ranges)
+
+Reads a file in streaming chunks (efficient, no memory overload)
+if no Range header- send whole file with 200 ok
+if range header present- sends only requested bytes with 206 partial content
+
+async def rerun_endpoint(request: Requests, x_api_key=Optional[str]=Header(None))
+request: Request - gives access to request details (headers,body)
+x_api_key= optional custom header for authentication
+
+API key authentication
+if API_KEY is set in environment, check that request header x-api-key matches, if not return 401 Unauthorized
+
+Create a working directory
+uid= uuid.uuid4().hex
+work_dir= STORAGE_DIR/uid
+work_dir.mkdir(parents=True, exist_ok=True)
+- creates a unique folder work_dir for this run using a random uuid
+- ensures no clashes between multiple runs
+
+Scrape data
+input_csv= work_dir / "scraped_input.csv"
+save csv to input_csv
+if scraping fails 500 internal server error
+
+Processing
+use processor.generate_reports_from_csv
+
+Update latest storage
+if LATEST_DIR.exists():
+    shutil.rmtree(LATEST_DIR)
+LATEST_DIR.mkdir(parents=True,exist_ok=True)
+
+deletes old latest folder
+creates a new one 
+
+saves metadata as meta.json for persistence
+
+sends back a json response with file paths
+
+datetime.utcnow()- returns a naive datetime (no timezone info)
+in modern code it is often recommended to always use timezone-aware datetimes- otherwise you can easily get bugs when mixing local time, UTC, Disposition
+datetime.now(timezone.utc)- object explicitly knows its in UTC
+any comparisons or conversions to other timezones will be correct
+
+safe_name= os.path.basename(filename)
+- removes any directory part from filename
+prevents malicious users from doing ../../etc/passwd kind of attacks
+
+Content-Disposition: inline → tells browser to display file in browser (if possible).
+e.g., PDFs open inside the tab instead of downloading.
