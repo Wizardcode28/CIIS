@@ -43,7 +43,7 @@ app= FastAPI(title="Auto Report API (CSV → PDF/DOCX)")
 
 # CORS allow all in dev, restrict in production
 origins=[
-    "https://ciis-indol.vercel.app/", 
+    "https://ciis-indol.vercel.app", 
     "http://localhost:8000",                     # for local testing
 ]
 app.add_middleware(CORSMiddleware, allow_origins=origins,allow_credentials=True, allow_methods=["*"],allow_headers=["*"])

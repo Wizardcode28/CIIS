@@ -1,22 +1,20 @@
-import requests,time,csv,re,os,json
-import numpy as np
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.firefox.options import Options
-import random
-from pathlib import Path
+import os
+import csv
+import time
 import logging
-  
+from pathlib import Path
+from datetime import datetime, timezone
+from typing import Iterable, List, Optional
+
+import praw 
+import prawcore
+import pytz
+
 logger = logging.getLogger("reddit_scraper")
 logger.setLevel(logging.INFO)
 
-options=Options()
-options.add_argument("--headless")
-
-political_queries = [
+# default queries (copied from your Selenium version)
+political_queries: List[str] = [
     "india politics",
     "india protest",
     "india government fail",
@@ -57,87 +55,126 @@ political_queries = [
     "india brutality",
     "india minority oppression"
 ]
-# PROGRESS_FILE = "ciis_progress.json"
 
-def scrape_reddit_to_csv(output_csv_path:str, queries=political_queries, limit:int= 500):
-    count=0
-    Path(output_csv_path).parent.mkdir(parents=True, exist_ok= True)
-    logger.info("Running scraper and saving csv to %s",output_csv_path)
-    browser=webdriver.Firefox(options=options)
-    wait= WebDriverWait(browser,10)
-    with open(output_csv_path,"w",newline='',encoding="utf-8") as f:
-        writer= csv.writer(f)
-        writer.writerow(["Title","Reference","Score","Comments","Time","Author","Subreddit","Description","Url"])
-        for query in queries:
-            browser.get("https://old.reddit.com/search")
-    
-            search= wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR,"input[placeholder='search']")))
-            search.clear()
-            search.send_keys(query)
-            search.submit()
-            for page in range(2):
-                wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR,"span.nextprev")))
-                posts= browser.find_elements(By.CLASS_NAME,"search-result-link")
-                for post in posts:
-                    try:
-                        link=post.find_element(By.CSS_SELECTOR,"a.thumbnail").get_attribute("href")
-                    except:
-                        link=np.nan
-                    try:
-                        header= post.find_element(By.CSS_SELECTOR,"header.search-result-header")
-                    except:
-                        header=np.nan
-                    try:
-                        search_title= header.find_element(By.CSS_SELECTOR,"a.search-title").text.strip()
-                    except:
-                        search_title=np.nan
-                    try:
-                        reference= header.find_element(By.CSS_SELECTOR,"span span").text.strip()
-                    except:
-                        reference=np.nan
-                    try:
-                        search_result_meta= post.find_element(By.CSS_SELECTOR,"div.search-result-meta")
-                    except:
-                        search_result_meta=np.nan
-                    try:
-                        search_score= search_result_meta.find_element(By.CSS_SELECTOR,"span.search-score").text.strip()
-                    except:
-                        search_score=np.nan
-                    try:
-                        comments= search_result_meta.find_element(By.CSS_SELECTOR,"a.search-comments").text.strip()
-                    except:
-                        comments=np.nan
-                    try:
-                        post_time= search_result_meta.find_element(By.CSS_SELECTOR,"span.search-time time").text.strip()
-                    except:
-                        post_time=np.nan
-                    try:
-                        author= search_result_meta.find_element(By.CSS_SELECTOR,"span.search-author a.author").text.strip()
-                    except:
-                        author=np.nan
-                    try:
-                        subreddit= search_result_meta.find_element(By.CSS_SELECTOR,"a.search-subreddit-link").text.strip()
-                    except:
-                        subreddit=np.nan
-                    try:
-                        desc= post.find_element(By.CSS_SELECTOR,".md p").text.strip()
-                    except:
-                        desc=np.nan
-                    # place_name= query.split()[0]
-                    keywords=query.lower().split()
-                    if any(kw in search_title.lower() or kw in str(desc).lower() for kw in keywords):
-                        writer.writerow([search_title,reference,search_score,comments,post_time,author,subreddit,desc,link])
-                        count+=1
-                next_buttons= browser.find_elements(By.CSS_SELECTOR,"span.nextprev a")
-                if next_buttons:
-                    next_buttons[-1].click()
-                else:
+def _init_reddit():
+    """Initialize a PRAW Reddit instance using environment variables."""
+    client_id = os.environ.get("REDDIT_CLIENT_ID")
+    client_secret = os.environ.get("REDDIT_CLIENT_SECRET")
+    user_agent = os.environ.get("REDDIT_USER_AGENT", "reddit_scraper:v1.0")
+
+    if not client_id or not client_secret:
+        raise EnvironmentError(
+            "REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET must be set as environment variables."
+        )
+
+    return praw.Reddit(
+        client_id=client_id,
+        client_secret=client_secret,
+        user_agent=user_agent,
+        check_for_async=False  # prevents accidental async loop issues
+    )
+
+def _format_time(created_utc: Optional[float]) -> str:
+    """Return timestamp string in UTC 'YYYY-MM-DD HH:MM:SS' (fallback 'N/A')."""
+    if not created_utc:
+        return "N/A"
+    # use UTC time for consistency
+    dt = datetime.fromtimestamp(created_utc, tz=timezone.utc)
+    return dt.strftime("%Y-%m-%d %H:%M:%S")
+
+def scrape_reddit_to_csv(
+    output_csv_path: str,
+    queries: Iterable[str] = political_queries,
+    per_query_limit: int = 100,
+    total_limit: int = 500,
+    delay_between_queries: float = 1.0
+) -> int:
+    """
+    Scrape reddit using PRAW and save results to output_csv_path.
+    - per_query_limit: max results to request per query (PRAW will respect rate limits)
+    - total_limit: overall cap on number of rows written
+    - returns: number of rows written
+    """
+
+    reddit = _init_reddit()
+
+    Path(output_csv_path).parent.mkdir(parents=True, exist_ok=True)
+    logger.info("Running PRAW scraper and saving CSV to %s", output_csv_path)
+
+    written = 0
+    seen_ids = set()
+
+    header = ["Title", "Reference", "Score", "Comments", "Time", "Author", "Subreddit", "Description", "Url"]
+
+    with open(output_csv_path, "w", newline="", encoding="utf-8") as fh:
+        writer = csv.writer(fh)
+        writer.writerow(header)
+
+        try:
+            for query in queries:
+                if written >= total_limit:
+                    logger.info("Reached total_limit=%s, stopping.", total_limit)
                     break
-            time.sleep(random.uniform(1, 2.5))
-    time.sleep(2)
-    browser.quit()
-    logger.info("Scrapper: wrote %d rows to %s",count,output_csv_path)
 
-  
+                logger.info("Searching Reddit for query: %s (limit=%s)", query, per_query_limit)
+                try:
+                    # search on r/all
+                    submissions = reddit.subreddit("all").search(query, sort="new", limit=per_query_limit)
+                except prawcore.exceptions.RequestException as e:
+                    logger.warning("Network error during PRAW search for '%s': %s", query, e)
+                    time.sleep(2)
+                    continue
+                except Exception as e:
+                    logger.exception("PRAW search failed for '%s': %s", query, e)
+                    time.sleep(2)
+                    continue
 
+                keywords = [kw.lower() for kw in query.split() if kw.strip()]
+
+                for sub in submissions:
+                    if written >= total_limit:
+                        break
+
+                    try:
+                        sid = getattr(sub, "id", None)
+                        if not sid:
+                            continue
+                        if sid in seen_ids:
+                            continue
+                        seen_ids.add(sid)
+
+                        title = getattr(sub, "title", "") or ""
+                        reference = sid
+                        score = getattr(sub, "score", 0) or 0
+                        comments = getattr(sub, "num_comments", 0) or 0
+                        created = _format_time(getattr(sub, "created_utc", None))
+                        author = getattr(sub.author, "name", "deleted") if getattr(sub, "author", None) else "deleted"
+                        subreddit = getattr(sub.subreddit, "display_name", "") or ""
+                        description = getattr(sub, "selftext", "") or ""
+                        url = getattr(sub, "url", "") or ""
+
+                        # replicate the original filtering: ensure query keywords appear in title or description
+                        text_for_check = f"{title} {description}".lower()
+                        if keywords and not any(kw in text_for_check for kw in keywords):
+                            # skip items that don't appear relevant
+                            continue
+
+                        writer.writerow([title, reference, score, comments, created, author, subreddit, description, url])
+                        written += 1
+
+                    except Exception as e:
+                        # don't stop the whole scraper for one failing submission
+                        logger.exception("Failed to process submission %s: %s", getattr(sub, "id", "<no-id>"), e)
+                        continue
+
+                # respectful delay between queries to reduce risk of rate limiting
+                time.sleep(delay_between_queries)
+
+        except KeyboardInterrupt:
+            logger.warning("Scraper interrupted by user.")
+        except Exception as e:
+            logger.exception("Unhandled exception during scraping: %s", e)
+
+    logger.info("Scraper finished: wrote %d rows to %s", written, output_csv_path)
+    return written
 
