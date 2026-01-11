@@ -144,3 +144,5 @@ prevents malicious users from doing ../../etc/passwd kind of attacks
 
 Content-Disposition: inline → tells browser to display file in browser (if possible).
 e.g., PDFs open inside the tab instead of downloading.
+
+"pdf": "/files/report.pdf" if (LATEST_DIR / "report.pdf").exists() else (f"/files/{(LATEST_DIR / src.name).name}" if result else ""),

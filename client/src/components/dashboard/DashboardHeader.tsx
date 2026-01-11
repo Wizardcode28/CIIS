@@ -33,7 +33,7 @@ export function DashboardHeader({
   return (
     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 p-6 bg-dashboard-card border-b border-border">
       <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-bold text-foreground">Auto Report Dashboard</h1>
+        <h1 className="text-3xl font-bold text-foreground">Social Media Dashboard</h1>
         <div className="flex items-center gap-3">
           <Badge variant={config.variant} className="flex items-center gap-1">
             {StatusIcon && (

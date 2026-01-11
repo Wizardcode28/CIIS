@@ -5,6 +5,7 @@ import logging
 from pathlib import Path
 from datetime import datetime, timezone
 from typing import Iterable, List, Optional
+from dotenv import load_dotenv
 
 import praw 
 import prawcore
@@ -12,6 +13,8 @@ import pytz
 
 logger = logging.getLogger("reddit_scraper")
 logger.setLevel(logging.INFO)
+
+load_dotenv()
 
 # default queries (copied from your Selenium version)
 political_queries: List[str] = [
@@ -66,7 +69,7 @@ def _init_reddit():
         raise EnvironmentError(
             "REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET must be set as environment variables."
         )
-
+  
     return praw.Reddit(
         client_id=client_id,
         client_secret=client_secret,
@@ -84,9 +87,8 @@ def _format_time(created_utc: Optional[float]) -> str:
 
 def scrape_reddit_to_csv(
     output_csv_path: str,
-    queries: Iterable[str] = political_queries,
-    per_query_limit: int = 100,
-    total_limit: int = 500,
+    per_query_limit: int,
+    total_limit: int,
     delay_between_queries: float = 1.0
 ) -> int:
     """
@@ -111,7 +113,7 @@ def scrape_reddit_to_csv(
         writer.writerow(header)
 
         try:
-            for query in queries:
+            for query in political_queries:
                 if written >= total_limit:
                     logger.info("Reached total_limit=%s, stopping.", total_limit)
                     break

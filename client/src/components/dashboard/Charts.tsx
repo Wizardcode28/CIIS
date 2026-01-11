@@ -26,15 +26,24 @@ interface ChartsProps {
 }
 
 const COLORS = ['#4F81BD', '#F28B82', '#A2C181', '#FFB366', '#9D7AD2', '#67C5D1'];
+const TOPIC_LABELS = {
+  0: "Public Protests",
+  1: "Governance & Elections",
+  2: "Kashmir Issues"
+}
 
-export function Charts({ 
-  sentimentData, 
-  natureData, 
-  topicsData, 
-  timelineData, 
+export function Charts({
+  sentimentData,
+  natureData,
+  topicsData,
+  timelineData,
   topWords,
-  onChartClick 
+  onChartClick
 }: ChartsProps) {
+  const mappedTopicsData = topicsData.map((item) => ({
+    name: TOPIC_LABELS[Number(item.name)] ?? `Topic ${item.name}`,
+    value: item.value,
+  }));
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       {/* Sentiment Distribution */}
@@ -46,21 +55,21 @@ export function Charts({
         </CardHeader>
         <CardContent>
           <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={sentimentData} 
+            <BarChart data={sentimentData}
             // margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
             >
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
               <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" />
               <YAxis stroke="hsl(var(--muted-foreground))" />
-              <Tooltip 
+              <Tooltip
                 contentStyle={{
                   backgroundColor: 'hsl(var(--dashboard-card))',
                   border: '1px solid hsl(var(--border))',
                   borderRadius: '8px'
                 }}
               />
-              <Bar 
-                dataKey="value" 
+              <Bar
+                dataKey="value"
                 radius={[4, 4, 0, 0]}
                 cursor="pointer"
                 onClick={(data) => onChartClick?.('sentiment', data.name)}
@@ -94,21 +103,21 @@ export function Charts({
                 fill="#8884d8"
                 dataKey="value"
                 // label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
-                label={({ name, percent }) => 
+                label={({ name, percent }) =>
                   percent > 0.05 ? `${name.length > 10 ? name.substring(0, 10) + '...' : name} (${(percent * 100).toFixed(0)}%)` : ''
                 }
                 labelLine={false}
               >
                 {natureData.map((entry, index) => (
-                  <Cell 
-                    key={`cell-${index}`} 
+                  <Cell
+                    key={`cell-${index}`}
                     fill={COLORS[index % COLORS.length]}
                     cursor="pointer"
                     onClick={() => onChartClick?.('nature', entry.name)}
                   />
                 ))}
               </Pie>
-              <Tooltip 
+              <Tooltip
                 contentStyle={{
                   backgroundColor: 'hsl(var(--dashboard-card))',
                   border: '1px solid hsl(var(--border))',
@@ -120,6 +129,7 @@ export function Charts({
         </CardContent>
       </Card>
 
+
       {/* Topics Distribution */}
       <Card className="bg-dashboard-card border-border">
         <CardHeader>
@@ -128,20 +138,28 @@ export function Charts({
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={250}>
-            <BarChart data={topicsData}>
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={mappedTopicsData}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-              <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" />
+              <XAxis
+                dataKey="name"
+                interval={0}
+                angle={-25}
+                textAnchor="end"
+                height={100}
+                stroke="hsl(var(--muted-foreground))"
+              />
+
               <YAxis stroke="hsl(var(--muted-foreground))" />
-              <Tooltip 
+              <Tooltip
                 contentStyle={{
                   backgroundColor: 'hsl(var(--dashboard-card))',
                   border: '1px solid hsl(var(--border))',
                   borderRadius: '8px'
                 }}
               />
-              <Bar 
-                dataKey="value" 
+              <Bar
+                dataKey="value"
                 fill="hsl(var(--chart-primary))"
                 radius={[4, 4, 0, 0]}
                 cursor="pointer"
@@ -163,13 +181,13 @@ export function Charts({
           <ResponsiveContainer width="100%" height={250}>
             <LineChart data={timelineData}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-              <XAxis 
-                dataKey="date" 
+              <XAxis
+                dataKey="date"
                 stroke="hsl(var(--muted-foreground))"
                 tickFormatter={(date) => new Date(date).toLocaleDateString()}
               />
               <YAxis stroke="hsl(var(--muted-foreground))" />
-              <Tooltip 
+              <Tooltip
                 contentStyle={{
                   backgroundColor: 'hsl(var(--dashboard-card))',
                   border: '1px solid hsl(var(--border))',
@@ -177,10 +195,10 @@ export function Charts({
                 }}
                 labelFormatter={(date) => new Date(date).toLocaleDateString()}
               />
-              <Line 
-                type="monotone" 
-                dataKey="count" 
-                stroke="hsl(var(--chart-primary))" 
+              <Line
+                type="monotone"
+                dataKey="count"
+                stroke="hsl(var(--chart-primary))"
                 strokeWidth={2}
                 dot={{ fill: 'hsl(var(--chart-primary))', strokeWidth: 2, r: 4 }}
                 activeDot={{ r: 6, stroke: 'hsl(var(--chart-primary))', strokeWidth: 2 }}
@@ -199,7 +217,7 @@ export function Charts({
         </CardHeader>
         <CardContent className="flex justify-center items-center">
           <div className="w-full max-w-2xl">
-            <img 
+            <img
               src={apiService.getWordCloudUrl()}
               alt="Word Cloud Visualization"
               className="w-full h-auto rounded-lg shadow-sm"
@@ -215,7 +233,7 @@ export function Charts({
           </div>
         </CardContent>
       </Card>
-      
+
       {/* Top Words - Spans full width */}
       <Card className="bg-dashboard-card border-border lg:col-span-2">
         <CardHeader>

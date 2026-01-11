@@ -257,8 +257,11 @@ def generate_reports_from_csv(input_csv:str, out_dir:str) -> dict:
 
     df["sentiment"] = [p[0] for p in preds]
     df["sentiment_score"] = [p[1] for p in preds]
-
-    df["nature"] = df.apply(lambda r: determine_nature(r["clean_text"], r["sentiment"]), axis=1)
+    # df["nature"] = df.apply(lambda r: determine_nature(r["clean_text"], r["sentiment"]), axis=1)
+    df["nature"] = df.apply(
+    lambda r: determine_nature(r["clean_text"], r["sentiment"]),
+    axis=1
+    )   
 
     # ---------------- TOPIC MODELING ----------------
     print("Performing topic modeling...")

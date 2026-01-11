@@ -23,29 +23,29 @@ export function AutoReportDashboard() {
     nature?: string;
     word?: string;
   }>({});
-  
+
   const { toast } = useToast();
 
   // Load initial report data
   const loadReportData = useCallback(async () => {
     try {
       const report = await apiService.getReport();
-      
+
       if (report.csv) {
         const csvContent = await apiService.getFile(report.csv.replace('/files/', ''));
         const parsedData = await parseCSV(csvContent);
         setReportData(parsedData);
         setCsvUrl(apiService.getFileUrl(report.csv.replace('/files/', '')));
       }
-      
+
       if (report.pdf) {
         setPdfUrl(apiService.getFileUrl(report.pdf.replace('/files/', '')));
       }
-      
+
       if (report.generated_at) {
         setLastGenerated(report.generated_at);
       }
-      
+
       setStatus('success');
     } catch (error) {
       // if (error instanceof Error && error.message.includes('404')) {
@@ -80,7 +80,7 @@ export function AutoReportDashboard() {
       const parsedData = await parseCSV(csvContent);
       setReportData(parsedData);
       setStatus('success');
-      
+
       toast({
         title: 'Sample Data Loaded',
         description: 'Using sample data for demonstration purposes.',
@@ -92,18 +92,18 @@ export function AutoReportDashboard() {
   }, [toast]);
 
   // Rerun report
-  const handleRerun = useCallback(async () => {
+  const handleRerun = useCallback(async (intent: any) => {
     setShowConfirmDialog(false);
     setStatus('processing');
-    
+
     toast({
       title: 'Starting Report Generation',
-      description: 'Backend is scraping live data and processing...',
+      description: `Backend is scraping live data (${intent} scan) and processing...`,
     });
 
     try {
-      const result = await apiService.rerunReport();
-      
+      const result = await apiService.rerunReport(intent);
+
       if (result.status === 'ok') {
         // Wait a moment then reload the data
         setTimeout(async () => {
@@ -118,7 +118,7 @@ export function AutoReportDashboard() {
       }
     } catch (error) {
       setStatus('error');
-      
+
       // Fallback to sample data for demo purposes
       setTimeout(() => {
         loadSampleData();
@@ -164,7 +164,7 @@ export function AutoReportDashboard() {
   // Chart click handlers for filtering
   const handleChartClick = useCallback((filterType: string, value: string) => {
     const newFilters = { ...chartFilters };
-    
+
     if (filterType === 'sentiment') {
       newFilters.sentiment = newFilters.sentiment === value ? undefined : value;
     } else if (filterType === 'nature') {
@@ -172,16 +172,16 @@ export function AutoReportDashboard() {
     } else if (filterType === 'word') {
       newFilters.word = newFilters.word === value ? undefined : value;
     }
-    
+
     // Remove undefined values
     Object.keys(newFilters).forEach(key => {
       if (newFilters[key as keyof typeof newFilters] === undefined) {
         delete newFilters[key as keyof typeof newFilters];
       }
     });
-    
+
     setChartFilters(newFilters);
-    
+
     toast({
       title: 'Filter Applied',
       description: `Filtering posts by ${filterType}: ${value}`,

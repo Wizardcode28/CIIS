@@ -8,11 +8,13 @@ from fastapi import FastAPI, Query, HTTPException, Header, BackgroundTasks, Requ
 from fastapi.responses import HTMLResponse, JSONResponse,StreamingResponse,FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.concurrency import run_in_threadpool
+from pydantic import BaseModel
+from typing import Literal
 
 try:
     import processor
-except Exception:
-    processor = None
+except Exception as e:
+    raise RuntimeError(f"Failed to import processor.py: {e}")
 
 from reddit_scrapper import scrape_reddit_to_csv
 
@@ -23,6 +25,15 @@ try:
     from docx.shared import Inches
 except Exception:
     DOCX_AVAILABLE = False
+
+class RerunRequest(BaseModel):
+    intent: Literal["light", "medium", "deep"]
+
+INTENT_LIMITS = {
+    "light":  {"per_query": 20,  "total": 100},
+    "medium": {"per_query": 50,  "total": 300},
+    "deep":   {"per_query": 100, "total": 800},
+}
 
 # ---- Configuration ----
 BASE_DIR= Path(__file__).resolve().parent
@@ -44,24 +55,18 @@ app= FastAPI(title="Auto Report API (CSV → PDF/DOCX)")
 # CORS allow all in dev, restrict in production
 origins=[
     "https://ciis-indol.vercel.app", 
-    "http://localhost:8000",                     # for local testing
+    "http://localhost:8080",                     # for local testing
+    "http://localhost:8000",
 ]
-app.add_middleware(CORSMiddleware, allow_origins=origins,allow_credentials=True, allow_methods=["*"],allow_headers=["*"])
 
-political_queries = [
-    #  "india politics", "india protest", "india government fail", "india corruption", "india democracy threat", "india dictatorship", "india religious violence", "india communal riots", "india anti muslim", "india anti sikh", "india caste violence", "india hate speech", "india freedom struggle", "india human rights violation", "india farmers protest", "india caa protest", "india nrc protest", "india modi resign", "india bjp fail", "india rss agenda", "india fake news", "india propaganda", "india media blackout", "boycott india", "boycott indian products", "boycott bollywood", "kashmir freedom", "kashmir human rights", "kashmir india occupation", "kashmir protest", "khalistan movement", "punjab separatism", "anti national india", "down with india", "stop india aggression",
-    # "india pakistan conflict",
-    # "china india border",
-    "india brutality",
-    "india minority oppression"
-]
+app.add_middleware(CORSMiddleware, allow_origins=origins,allow_credentials=True, allow_methods=["*"],allow_headers=["*"])
 
 # Helper: safe path join inside storage using Path
 def storage_path(filename:str)-> Path:
     return LATEST_DIR/filename
 
-def scrape_live_data(output_csv_path:str)->None:
-    scrape_reddit_to_csv(output_csv_path,political_queries)
+def scrape_live_data(output_csv_path:str, per_query: int, total:int)->None:
+    scrape_reddit_to_csv(output_csv_path,per_query,total)
 
 # ------------------------------
 # Range-supporting file response for large files (PDF preview)
@@ -144,7 +149,7 @@ def home():
     return {"message":"sever working"}
 
 @app.post("/rerun")
-async def rerun_endpoint(request: Request, x_api_key: Optional[str] = Header(None)):
+async def rerun_endpoint(body: RerunRequest, x_api_key: Optional[str] = Header(None)):
     """
     Trigger live scraping + processing.
     Optional x-api-key header if API_KEY is set in env.
@@ -163,8 +168,9 @@ async def rerun_endpoint(request: Request, x_api_key: Optional[str] = Header(Non
 
     # step 1: scrape live data -> create input CSV path
     input_csv = work_dir / "scraped_input.csv"
+    limits= INTENT_LIMITS[body.intent]
     try:
-        scrape_live_data(str(input_csv))
+        scrape_live_data(str(input_csv),int(limits["per_query"]),int(limits["total"]))
     except Exception as e:
         logger.exception("Scraping failed: %s", e)
         raise HTTPException(status_code=500, detail=f"Scraping failed: {e}")
@@ -174,6 +180,7 @@ async def rerun_endpoint(request: Request, x_api_key: Optional[str] = Header(Non
         logger.info("Calling user-provided processor.generate_reports_from_csv")
         # assume processor writes to out_dir and returns dict or nothing
         out = processor.generate_reports_from_csv(str(input_csv), str(work_dir))
+
         # normalize result
         pdf_path = str(work_dir / "report.pdf")
         csv_path = str(work_dir / "analysis_output.csv")
@@ -199,11 +206,12 @@ async def rerun_endpoint(request: Request, x_api_key: Optional[str] = Header(Non
         generated_at = datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S")
         # write metadata file
         meta = {
-            "pdf": "/files/report.pdf" if (LATEST_DIR / "report.pdf").exists() else (f"/files/{(LATEST_DIR / src.name).name}" if produced_files else ""),
+            "pdf": "/files/report.pdf" if (LATEST_DIR / "report.pdf").exists() else "",
             "csv": "/files/analysis_output.csv" if (LATEST_DIR / "analysis_output.csv").exists() else "",
             "docx": "/files/report.docx" if (LATEST_DIR / "report.docx").exists() else "",
             "generated_at": generated_at,
         }
+
         # write meta to disk for persistence
         with open(LATEST_DIR / "meta.json", "w", encoding="utf-8") as mf:
             import json
