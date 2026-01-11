@@ -65,7 +65,10 @@ def _init_reddit():
     client_secret = os.environ.get("REDDIT_CLIENT_SECRET")
     user_agent = os.environ.get("REDDIT_USER_AGENT", "reddit_scraper:v1.0")
 
+    logger.info(f"Initializing Reddit with ClientID: {client_id}, Agent: {user_agent}")
+
     if not client_id or not client_secret:
+        logger.error("Missing REDDIT_CLIENT_ID or REDDIT_CLIENT_SECRET env vars")
         raise EnvironmentError(
             "REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET must be set as environment variables."
         )
@@ -98,7 +101,12 @@ def scrape_reddit_to_csv(
     - returns: number of rows written
     """
 
-    reddit = _init_reddit()
+    try:
+        reddit = _init_reddit()
+        logger.info(f"Reddit instance created. Read-only: {reddit.read_only}")
+    except Exception as e:
+        logger.exception(f"Failed to init reddit: {e}")
+        raise
 
     Path(output_csv_path).parent.mkdir(parents=True, exist_ok=True)
     logger.info("Running PRAW scraper and saving CSV to %s", output_csv_path)
@@ -122,6 +130,8 @@ def scrape_reddit_to_csv(
                 try:
                     # search on r/all
                     submissions = reddit.subreddit("all").search(query, sort="new", limit=per_query_limit)
+                    # Force a generator fetch to check for immediate auth errors
+                    # submissions = list(submissions) 
                 except prawcore.exceptions.RequestException as e:
                     logger.warning("Network error during PRAW search for '%s': %s", query, e)
                     time.sleep(2)

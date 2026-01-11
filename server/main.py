@@ -55,8 +55,12 @@ app= FastAPI(title="Auto Report API (CSV → PDF/DOCX)")
 # CORS allow all in dev, restrict in production
 origins=[
     "https://ciis-indol.vercel.app", 
-    "http://localhost:8080",                     # for local testing
+    "http://localhost:8080",
+    "http://127.0.0.1:8080",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
     "http://localhost:8000",
+    "http://127.0.0.1:8000"
 ]
 
 app.add_middleware(CORSMiddleware, allow_origins=origins,allow_credentials=True, allow_methods=["*"],allow_headers=["*"])
@@ -169,8 +173,12 @@ async def rerun_endpoint(body: RerunRequest, x_api_key: Optional[str] = Header(N
     # step 1: scrape live data -> create input CSV path
     input_csv = work_dir / "scraped_input.csv"
     limits= INTENT_LIMITS[body.intent]
+    logger.info(f"Received rerun request. Intent: {body.intent}, Limits: {limits}")
+    
     try:
+        logger.info(f"Starting scraping to {input_csv}...")
         scrape_live_data(str(input_csv),int(limits["per_query"]),int(limits["total"]))
+        logger.info("Scraping completed successfully.")
     except Exception as e:
         logger.exception("Scraping failed: %s", e)
         raise HTTPException(status_code=500, detail=f"Scraping failed: {e}")
@@ -180,6 +188,7 @@ async def rerun_endpoint(body: RerunRequest, x_api_key: Optional[str] = Header(N
         logger.info("Calling user-provided processor.generate_reports_from_csv")
         # assume processor writes to out_dir and returns dict or nothing
         out = processor.generate_reports_from_csv(str(input_csv), str(work_dir))
+        logger.info(f"Processing return value: {out}")
 
         # normalize result
         pdf_path = str(work_dir / "report.pdf")
