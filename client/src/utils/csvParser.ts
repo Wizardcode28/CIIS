@@ -189,6 +189,7 @@ export function generateTopWords(data: ProcessedReportData[], limit: number = 20
     // Articles
     'the', 'a', 'an',
     'comments',
+    'nan',
     // Conjunctions
     'and', 'or', 'but', 'nor', 'yet', 'so', 'for',
     // Prepositions
