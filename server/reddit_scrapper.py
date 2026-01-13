@@ -92,7 +92,7 @@ def scrape_reddit_to_csv(
     output_csv_path: str,
     per_query_limit: int,
     total_limit: int,
-    delay_between_queries: float = 1.0
+    delay_between_queries: float = 1.5
 ) -> int:
     """
     Scrape reddit using PRAW and save results to output_csv_path.
