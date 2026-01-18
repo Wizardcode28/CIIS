@@ -33,6 +33,11 @@ try:
 except Exception:
     DOCX_AVAILABLE = False
 
+try:
+    import sentiment_analysis
+except Exception as e:
+    raise RuntimeError(f"Failed to import sentiment_analysis.py: {e}")
+
 logger = logging.getLogger("processor")
 logger.setLevel(logging.INFO)
 
@@ -56,16 +61,16 @@ try:
 except Exception:
     device = -1
 
-try:
-    sentiment_model = pipeline("sentiment-analysis",
-                            model="distilbert-base-uncased-finetuned-sst-2-english",
-                            device=device)
-except Exception as e:
-    print("Failed to load requested model:", e)
-    try:
-        sentiment_model = pipeline("sentiment-analysis", device=device)
-    except Exception as ex:
-        print("Final sentiment pipeline fallback failed:", ex); sys.exit(1)
+# try:
+#     sentiment_model = pipeline("sentiment-analysis",
+#                             model="cardiffnlp/twitter-roberta-base-sentiment-latest",
+#                             device=device)
+# except Exception as e:
+#     print("Failed to load requested model:", e)
+#     try:
+#         sentiment_model = pipeline("sentiment-analysis", device=device)
+#     except Exception as ex:
+#         print("Final sentiment pipeline fallback failed:", ex); sys.exit(1)
             
 
 def parse_relative_time(s: str, ref: pd.Timestamp):
@@ -157,22 +162,37 @@ def text_matches_any(text, patterns):
 
 def determine_nature(text, sentiment_label):
     t = (text or "").lower()
+    # 1. High-priority flags (dangerous or specific categories)
     if text_matches_any(t, SEPARATIST_RE): return "separatist"
-    if text_matches_any(t, ANTI_INDIA_RE): return "anti-india"
-    if text_matches_any(t, PRO_INDIA_RE): return "pro-india"
     if text_matches_any(t, CALL_TO_ACTION_RE): return "call-to-action"
     if text_matches_any(t, COMMUNAL_RE): return "communal"
     if text_matches_any(t, CONSPIRACY_RE): return "conspiratorial"
+
+    # 2. Trust the advanced model's label if available
+    s = str(sentiment_label)
+    if s == "Pro-India": return "pro-india"
+    if s == "Anti-India": return "anti-india"
+    if s == "Pro-Government": return "pro-government"
+    if s == "Anti-Government": return "anti-government"
+
+    # 3. Fallback to Regex for other cases or if model was Neutral
+    if text_matches_any(t, ANTI_INDIA_RE): return "anti-india"
+    if text_matches_any(t, PRO_INDIA_RE): return "pro-india"
     if text_matches_any(t, CRITICAL_GOVT_RE): return "critical-of-government"
     if text_matches_any(t, SUPPORT_OPPOSITION_RE): return "supportive-of-opposition"
-    s = str(sentiment_label).upper()
-    if "POS" in s: return "supportive"
-    if "NEG" in s: return "critical"
+
+    # 4. Fallback to generic POS/NEG (legacy)
+    s_upper = s.upper()
+    if "POS" in s_upper: return "supportive"
+    if "NEG" in s_upper: return "critical"
+    
     return "neutral"
 
 # ---------------- DANGEROUS FLAG ----------------
-danger_keywords = ["kill","attack","bomb","violence","terror","terrorist","militant","insurgency","boycott","protest","call to action"]
-pattern = re.compile(r'\b(?:' + '|'.join(map(re.escape, danger_keywords)) + r')\b', flags=re.IGNORECASE)
+danger_keywords = ["kill","attack","bomb","violence","terror","terrorist","militant",
+                   "insurgency","boycott","protest","call to action"]
+pattern = re.compile(r'\b(?:' + '|'.join(map(re.escape, danger_keywords)) + r')\b',
+                      flags=re.IGNORECASE)
 
 def is_dangerous(text, sentiment):
     if pattern.search(text or ""): return True
@@ -244,25 +264,30 @@ def generate_reports_from_csv(input_csv:str, out_dir:str) -> dict:
 
     # ---------------- SENTIMENT ----------------
     print("Loading sentiment model...")
+    # Initialize anchors (required for classification)
+    sentiment_analysis.init_anchors()
 
     texts = df["clean_text"].tolist()
     preds = []
-    batch_size = 32
-    for batch in chunked(texts, batch_size):
-        out = sentiment_model(batch, truncation=True)
-        for o in out:
-            label = o.get("label", "NEUTRAL")
-            score = float(o.get("score", 0.0))
+    
+    for text in texts:
+        out = sentiment_analysis.classify(text)
+        
+        # Handle error or valid result
+        if "error" in out:
+            preds.append(("NEUTRAL", 0.0))
+        else:
+            label = out.get("label", "NEUTRAL")
+            score = float(out.get("confidence", 0.0))
             preds.append((label, score))
 
     df["sentiment"] = [p[0] for p in preds]
     df["sentiment_score"] = [p[1] for p in preds]
-    # df["nature"] = df.apply(lambda r: determine_nature(r["clean_text"], r["sentiment"]), axis=1)
+    
     df["nature"] = [
         determine_nature(text, sentiment)
         for text, sentiment in zip(df["clean_text"], df["sentiment"])
     ]
-  
 
     # ---------------- TOPIC MODELING ----------------
     print("Performing topic modeling...")
@@ -444,8 +469,22 @@ def generate_reports_from_csv(input_csv:str, out_dir:str) -> dict:
     csv_out = out_dir/"analysis_output.csv"
     df_out = df.copy()
     df_out["created_at_str"] = df_out["created_at"].apply(lambda x: x.strftime("%Y-%m-%d %H:%M:%S") if pd.notna(x) else "")
-    df_out.to_csv(csv_out, index=False, encoding="utf-8")
-    print("✅ Enriched CSV saved as:", csv_out)
+    
+    import time
+    for attempt in range(3):
+        try:
+            df_out.to_csv(csv_out, index=False, encoding="utf-8")
+            print("✅ Enriched CSV saved as:", csv_out)
+            break
+        except PermissionError:
+            if attempt < 2:
+                print(f"⚠️ Permission denied saving CSV (file locked?). Retrying {attempt+1}/3 in 1s...")
+                time.sleep(1)
+            else:
+                print("❌ FAILED to save CSV. The file is likely open in another program (Excel/VS Code).")
+                # We don't raise here to allow PDF generation/return to complete, 
+                # but the CSV won't be updated.
+
 
 
     # ---------------- DOCX EXPORT (optional) ----------------

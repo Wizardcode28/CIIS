@@ -18,13 +18,13 @@ const COLUMN_ALIASES: Record<string, string[]> = {
 
 function normalizeColumnName(originalName: string): string {
   const lowerName = originalName.toLowerCase().trim();
-  
+
   for (const [standard, aliases] of Object.entries(COLUMN_ALIASES)) {
     if (aliases.some(alias => lowerName === alias.toLowerCase())) {
       return standard;
     }
   }
-  
+
   return originalName;
 }
 
@@ -45,7 +45,7 @@ function normalizeDate(value: string): Date {
       const [, amount, unit] = match;
       const date = new Date();
       const num = parseInt(amount);
-      
+
       switch (unit) {
         case 'day':
           date.setDate(date.getDate() - num);
@@ -60,11 +60,11 @@ function normalizeDate(value: string): Date {
           date.setFullYear(date.getFullYear() - num);
           break;
       }
-      
+
       return date;
     }
   }
-  
+
   // Try to parse as regular date
   return new Date(value);
 }
@@ -86,18 +86,32 @@ export function parseCSV(csvContent: string): Promise<ProcessedReportData[]> {
             .map((row: any) => {
               // Normalize the row data
               const normalized: any = {};
-              
+
               Object.entries(row).forEach(([key, value]) => {
                 const normalizedKey = normalizeColumnName(key);
                 normalized[normalizedKey] = value;
               });
-              
+
+              const rawNature = normalized.nature || 'neutral';
+              const rawSentiment = normalized.sentiment || 'NEUTRAL';
+
+              // Intelligent fallback: If nature is neutral but sentiment is specific, use sentiment
+              let finalNature = rawNature;
+              if (rawNature.toLowerCase() === 'neutral' && rawSentiment) {
+                const s = rawSentiment.trim();
+                // Check for key political labels in the sentiment column
+                if (['Pro-India', 'Anti-India', 'Pro-Government', 'Anti-Government'].includes(s)) {
+                  finalNature = s.toLowerCase();
+                } else if (s.includes('Pro-India')) finalNature = 'pro-india';
+                else if (s.includes('Anti-India')) finalNature = 'anti-india';
+              }
+
               return {
                 text_for_analysis: normalized.text_for_analysis || '',
                 clean_text: normalized.clean_text || normalized.text_for_analysis || '',
-                sentiment: normalized.sentiment || 'NEUTRAL',
+                sentiment: rawSentiment,
                 sentiment_score: parseFloat(normalized.sentiment_score) || 0,
-                nature: normalized.nature || 'neutral',
+                nature: finalNature,
                 topic: normalized.topic ? (typeof normalized.topic === 'number' ? normalized.topic : parseInt(normalized.topic) || normalized.topic) : '',
                 dangerous: normalizeBooleanValue(normalized.dangerous),
                 created_at: normalized.created_at || new Date().toISOString(),
@@ -108,7 +122,7 @@ export function parseCSV(csvContent: string): Promise<ProcessedReportData[]> {
               } as ProcessedReportData;
             })
             .filter(row => row.clean_text.trim().length > 0);
-          
+
           resolve(processedData);
         } catch (error) {
           reject(error);
@@ -148,7 +162,7 @@ export function generateChartData(data: ProcessedReportData[]): {
   }, {} as Record<string, number>);
 
   const nature = Object.entries(natureCounts)
-    .sort(([,a], [,b]) => b - a)
+    .sort(([, a], [, b]) => b - a)
     .slice(0, 10)
     .map(([name, value]) => ({ name, value }));
 
@@ -160,7 +174,7 @@ export function generateChartData(data: ProcessedReportData[]): {
   }, {} as Record<string, number>);
 
   const topics = Object.entries(topicCounts)
-    .sort(([,a], [,b]) => b - a)
+    .sort(([, a], [, b]) => b - a)
     .slice(0, 10)
     .map(([name, value]) => ({ name, value }));
 
@@ -209,21 +223,21 @@ export function generateTopWords(data: ProcessedReportData[], limit: number = 20
   ]);
 
   const wordCounts: Record<string, number> = {};
-  
+
   data.forEach(item => {
     const words = item.clean_text
       .toLowerCase()
       .replace(/[^\w\s]/g, ' ')
       .split(/\s+/)
       .filter(word => word.length > 2 && !stopWords.has(word));
-    
+
     words.forEach(word => {
       wordCounts[word] = (wordCounts[word] || 0) + 1;
     });
   });
 
   return Object.entries(wordCounts)
-    .sort(([,a], [,b]) => b - a)
+    .sort(([, a], [, b]) => b - a)
     .slice(0, limit)
     .map(([name, value]) => ({ name, value }));
 }

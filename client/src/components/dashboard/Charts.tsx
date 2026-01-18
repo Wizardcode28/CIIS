@@ -55,12 +55,23 @@ export function Charts({
         </CardHeader>
         <CardContent>
           <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={sentimentData}
-            // margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+            <BarChart
+              data={sentimentData}
+              margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
             >
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-              <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" />
-              <YAxis stroke="hsl(var(--muted-foreground))" />
+              <XAxis
+                dataKey="name"
+                stroke="hsl(var(--muted-foreground))"
+                interval={0}
+                angle={-25}
+                textAnchor="end"
+                height={80}
+              />
+              <YAxis
+                stroke="hsl(var(--muted-foreground))"
+                allowDecimals={false}
+              />
               <Tooltip
                 contentStyle={{
                   backgroundColor: 'hsl(var(--dashboard-card))',
