@@ -1,12 +1,13 @@
 import Papa from 'papaparse';
-import { ReportData, ProcessedReportData, ChartDataPoint, TimelineDataPoint } from '@/types/report';
+import { ReportData, ProcessedReportData, ChartDataPoint, TimelineDataPoint, StackedChartDataPoint, HeatmapDataPoint, ScatterDataPoint, NatureSentimentDataPoint } from '@/types/report';
 
 // Column name aliases for robust parsing
 const COLUMN_ALIASES: Record<string, string[]> = {
   'text_for_analysis': ['text_for_analysis', 'text', 'content', 'message'],
   'clean_text': ['clean_text', 'cleantext', 'cleaned_text', 'processed_text'],
   'sentiment': ['sentiment', 'sentiment_label', 'Sentiment'],
-  'sentiment_score': ['sentiment_score', 'sentimentscore', 'score'],
+  'sentiment_score': ['sentiment_score', 'sentimentscore'],
+  'score': ['score', 'upvotes', 'points', 'likes', 'raw_score'],
   'nature': ['nature', 'Nature', 'category', 'classification'],
   'topic': ['topic', 'Topic', 'topic_id'],
   'dangerous': ['dangerous', 'Dangerous', 'flagged', 'risk'],
@@ -140,6 +141,13 @@ export function generateChartData(data: ProcessedReportData[]): {
   nature: ChartDataPoint[];
   topics: ChartDataPoint[];
   timeline: TimelineDataPoint[];
+  sentimentTrend: StackedChartDataPoint[];
+  activityHeatmap: HeatmapDataPoint[];
+  engagementScatter: ScatterDataPoint[];
+  dangerousData: ChartDataPoint[];
+  subredditEngagement: ChartDataPoint[];
+  natureSentiment: NatureSentimentDataPoint[];
+  riskySubreddits: ChartDataPoint[];
 } {
   // Sentiment distribution
   const sentimentCounts = data.reduce((acc, item) => {
@@ -194,7 +202,105 @@ export function generateChartData(data: ProcessedReportData[]): {
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([date, count]) => ({ date, count }));
 
-  return { sentiment, nature, topics, timeline };
+  // Sentiment Trend (Stacked)
+  const sentimentTrendObj = data.reduce((acc, item) => {
+    try {
+      const date = normalizeDate(item.created_at).toISOString().split('T')[0];
+      if (!acc[date]) acc[date] = { positive: 0, neutral: 0, negative: 0 };
+      const sentiment = item.sentiment?.toLowerCase() || 'neutral';
+      if (sentiment.includes('positive')) acc[date].positive++;
+      else if (sentiment.includes('negative')) acc[date].negative++;
+      else acc[date].neutral++;
+    } catch { }
+    return acc;
+  }, {} as Record<string, { positive: number; neutral: number; negative: number }>);
+
+  const sentimentTrend = Object.entries(sentimentTrendObj)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, counts]) => ({
+      date,
+      ...counts
+    }));
+
+  // Activity Heatmap
+  const heatmapObj = data.reduce((acc, item) => {
+    try {
+      const date = normalizeDate(item.created_at);
+      const day = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][date.getDay()];
+      const hour = date.getHours();
+      const key = `${day}-${hour}`;
+      if (!acc[key]) acc[key] = { day, hour, value: 0 };
+      acc[key].value++;
+    } catch { }
+    return acc;
+  }, {} as Record<string, HeatmapDataPoint>);
+
+  const activityHeatmap = Object.values(heatmapObj);
+
+  // Engagement Scatter
+  const engagementScatter = data
+    .filter(item => item.sentiment_score !== undefined && item.score !== undefined)
+    .map(item => ({
+      x: item.sentiment_score,
+      y: item.score,
+      z: 1,
+      name: item.subreddit || 'Unknown',
+      title: (item as any).title || item.clean_text.substring(0, 50)
+    }))
+    .slice(0, 500); // Limit to avoid performance issues if huge dataset
+
+  // Dangerous Distribution
+  const dangerousCounts = data.reduce((acc, item) => {
+    const key = item.dangerous ? 'Flagged' : 'Safe';
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+  const dangerousData = Object.entries(dangerousCounts).map(([name, value]) => ({
+    name,
+    value,
+    color: name === 'Flagged' ? '#ef4444' : '#22c55e'
+  }));
+
+  // Subreddit Engagement
+  const subEngagementObj = data.reduce((acc, item) => {
+    const sub = item.subreddit || 'Unknown';
+    acc[sub] = (acc[sub] || 0) + item.score;
+    return acc;
+  }, {} as Record<string, number>);
+
+  const subredditEngagement = Object.entries(subEngagementObj)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 10)
+    .map(([name, value]) => ({ name, value }));
+
+  // Nature Sentiment Breakdown
+  const natureSentimentObj = data.reduce((acc, item) => {
+    const nature = item.nature?.trim() || 'Unknown';
+    if (!acc[nature]) acc[nature] = { nature, positive: 0, neutral: 0, negative: 0 };
+    const sentiment = item.sentiment?.toLowerCase() || 'neutral';
+    if (sentiment.includes('positive')) acc[nature].positive++;
+    else if (sentiment.includes('negative')) acc[nature].negative++;
+    else acc[nature].neutral++;
+    return acc;
+  }, {} as Record<string, NatureSentimentDataPoint>);
+
+  const natureSentiment = Object.values(natureSentimentObj).filter(n => (n.positive + n.neutral + n.negative) > 2);
+
+  // Top Risky Subreddits
+  const riskySubObj = data.reduce((acc, item) => {
+    if (item.dangerous) {
+      const sub = item.subreddit || 'Unknown';
+      acc[sub] = (acc[sub] || 0) + 1;
+    }
+    return acc;
+  }, {} as Record<string, number>);
+
+  const riskySubreddits = Object.entries(riskySubObj)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 10)
+    .map(([name, value]) => ({ name, value }));
+
+  return { sentiment, nature, topics, timeline, sentimentTrend, activityHeatmap, engagementScatter, dangerousData, subredditEngagement, natureSentiment, riskySubreddits };
 }
 
 // Generate top words from clean text

@@ -195,7 +195,7 @@ export function FlaggedPosts({ data, filters }: FlaggedPostsProps) {
                         
                         <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
                           {post.subreddit && (
-                            <span>{post.subreddit}</span>
+                            <span>r/{post.subreddit}</span>
                           )}
                           {post.username && (
                             <span>u/{post.username}</span>

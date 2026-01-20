@@ -29,3 +29,31 @@ export interface TimelineDataPoint {
 }
 
 export type DashboardStatus = 'idle' | 'processing' | 'success' | 'error';
+
+export interface StackedChartDataPoint {
+  date: string;
+  positive: number;
+  neutral: number;
+  negative: number;
+}
+
+export interface HeatmapDataPoint {
+  day: string;
+  hour: number;
+  value: number;
+}
+
+export interface ScatterDataPoint {
+  x: number; // sentiment score
+  y: number; // engagement/score
+  z: number; // bubble size (optional)
+  name: string; // subreddit or topic
+  title?: string; // post title
+}
+
+export interface NatureSentimentDataPoint {
+  nature: string;
+  positive: number;
+  neutral: number;
+  negative: number;
+}

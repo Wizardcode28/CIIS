@@ -7,6 +7,7 @@ import { ProcessedReportData, DashboardStatus } from '@/types/report';
 import { DashboardHeader } from './dashboard/DashboardHeader';
 import { SummaryCards } from './dashboard/SummaryCards';
 import { Charts } from './dashboard/Charts';
+import { SideCharts } from './dashboard/SideCharts';
 import { FlaggedPosts } from './dashboard/FlaggedPosts';
 import { PDFPreview } from './dashboard/PDFPreview';
 import { RerunConfirmDialog } from './dashboard/RerunConfirmDialog';
@@ -198,7 +199,14 @@ export function AutoReportDashboard() {
     sentiment: [],
     nature: [],
     topics: [],
-    timeline: []
+    timeline: [],
+    sentimentTrend: [],
+    activityHeatmap: [],
+    engagementScatter: [],
+    dangerousData: [],
+    subredditEngagement: [],
+    natureSentiment: [],
+    riskySubreddits: []
   };
 
   const topWords = reportData.length > 0 ? generateTopWords(reportData) : [];
@@ -232,6 +240,13 @@ export function AutoReportDashboard() {
                 topicsData={chartData.topics}
                 timelineData={chartData.timeline}
                 topWords={topWords}
+                sentimentTrend={chartData.sentimentTrend}
+                activityHeatmap={chartData.activityHeatmap}
+                engagementScatter={chartData.engagementScatter}
+                dangerousData={chartData.dangerousData}
+                subredditEngagement={chartData.subredditEngagement}
+                natureSentiment={chartData.natureSentiment}
+                riskySubreddits={chartData.riskySubreddits}
                 onChartClick={handleChartClick}
               />
             ) : (
@@ -252,6 +267,14 @@ export function AutoReportDashboard() {
               pdfUrl={pdfUrl}
               onDownload={handleDownloadPdf}
             />
+            {reportData.length > 0 && (
+              <SideCharts
+                engagementScatter={chartData.engagementScatter}
+                dangerousData={chartData.dangerousData}
+                riskySubreddits={chartData.riskySubreddits}
+                onChartClick={handleChartClick}
+              />
+            )}
           </div>
         </div>
 

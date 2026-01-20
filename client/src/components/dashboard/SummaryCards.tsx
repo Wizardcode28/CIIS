@@ -10,10 +10,10 @@ export function SummaryCards({ data }: SummaryCardsProps) {
   const totalPosts = data.length;
   const flaggedPosts = data.filter(item => item.dangerous).length;
   const proIndiaCount = data.filter(item => 
-    item.nature.toLowerCase().includes('pro-india')
+    item.sentiment.toLowerCase().includes('pro-india')
   ).length;
   const antiIndiaCount = data.filter(item => 
-    item.nature.toLowerCase().includes('anti-india')
+    item.sentiment.toLowerCase().includes('anti-india')
   ).length;
   
   const cards = [
