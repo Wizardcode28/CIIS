@@ -159,7 +159,7 @@ export function generateChartData(data: ProcessedReportData[]): {
   const sentiment = Object.entries(sentimentCounts).map(([name, value]) => ({
     name,
     value,
-    color: name === 'POSITIVE' ? '#A2C181' : name === 'NEGATIVE' ? '#F28B82' : '#4F81BD'
+    color: (name === 'POSITIVE' || name === 'PRO-INDIA') ? '#A2C181' : (name === 'NEGATIVE' || name === 'ANTI-INDIA') ? '#F28B82' : '#4F81BD'
   }));
 
   // Nature distribution
@@ -208,8 +208,8 @@ export function generateChartData(data: ProcessedReportData[]): {
       const date = normalizeDate(item.created_at).toISOString().split('T')[0];
       if (!acc[date]) acc[date] = { positive: 0, neutral: 0, negative: 0 };
       const sentiment = item.sentiment?.toLowerCase() || 'neutral';
-      if (sentiment.includes('positive')) acc[date].positive++;
-      else if (sentiment.includes('negative')) acc[date].negative++;
+      if (sentiment.includes('pro-india')) acc[date].positive++;
+      else if (sentiment.includes('anti-india')) acc[date].negative++;
       else acc[date].neutral++;
     } catch { }
     return acc;
@@ -278,8 +278,8 @@ export function generateChartData(data: ProcessedReportData[]): {
     const nature = item.nature?.trim() || 'Unknown';
     if (!acc[nature]) acc[nature] = { nature, positive: 0, neutral: 0, negative: 0 };
     const sentiment = item.sentiment?.toLowerCase() || 'neutral';
-    if (sentiment.includes('positive')) acc[nature].positive++;
-    else if (sentiment.includes('negative')) acc[nature].negative++;
+    if (sentiment.includes('pro-india')) acc[nature].positive++;
+    else if (sentiment.includes('anti-india')) acc[nature].negative++;
     else acc[nature].neutral++;
     return acc;
   }, {} as Record<string, NatureSentimentDataPoint>);

@@ -30,7 +30,7 @@ class RerunRequest(BaseModel):
     intent: Literal["light", "medium", "deep"]
 
 INTENT_LIMITS = {
-    "light":  {"per_query": 5,  "total": 5},
+    "light":  {"per_query": 10,  "total": 25},
     "medium": {"per_query": 50,  "total": 300},
     "deep":   {"per_query": 100, "total": 800},
 }
