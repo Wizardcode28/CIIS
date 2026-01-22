@@ -195,8 +195,8 @@ pattern = re.compile(r'\b(?:' + '|'.join(map(re.escape, danger_keywords)) + r')\
                       flags=re.IGNORECASE)
 
 def is_dangerous(text, sentiment):
-    if pattern.search(text or ""): return True
-    return (str(sentiment).upper() == "NEGATIVE" and text.strip() != "")
+    # if pattern.search(text or ""): return True
+    return (str(sentiment).upper() == "ANTI-INDIA" and text.strip() != "")
 
 def generate_reports_from_csv(input_csv:str, out_dir:str) -> dict:
     """

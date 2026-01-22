@@ -25,14 +25,14 @@ export function SideCharts({
         <div className="space-y-8">
 
             {/* Engagement vs Sentiment Scatter */}
-            <Card className="bg-dashboard-card border-border mt-48">
+            <Card className="bg-dashboard-card border-border mt-44">
                 <CardHeader>
                     <CardTitle className="text-lg font-semibold text-foreground">
                         Engagement vs. Sentiment
                     </CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <ResponsiveContainer width="100%" height={250}>
+                    <ResponsiveContainer width="100%" height={280}>
                         <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                             <XAxis
@@ -83,7 +83,7 @@ export function SideCharts({
                     </CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <ResponsiveContainer width="100%" height={250}>
+                    <ResponsiveContainer width="100%" height={280}>
                         <PieChart>
                             <Pie
                                 data={dangerousData}

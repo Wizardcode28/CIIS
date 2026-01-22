@@ -157,15 +157,13 @@ export function Charts({
                 cx="50%"
                 cy="50%"
                 // outerRadius={80}
-                innerRadius={50}
-                outerRadius={90}
+                innerRadius={40}
+                outerRadius={70}
                 fill="#8884d8"
                 dataKey="value"
-                // label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
                 label={({ name, percent }) =>
-                  percent > 0.05 ? `${name.length > 10 ? name.substring(0, 10) + '...' : name} (${(percent * 100).toFixed(0)}%)` : ''
+                  percent > 0.05 ? `${name.length > 15 ? name.substring(0, 15) + '...' : name} (${(percent * 100).toFixed(0)}%)` : ''
                 }
-                labelLine={false}
               >
                 {natureData.map((entry, index) => (
                   <Cell
